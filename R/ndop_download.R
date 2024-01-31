@@ -112,6 +112,12 @@ ndop_download <- function(species, family, group, locations = 0, search_payload)
         meziexport_typ_exportu = 'csv',
         ndtokenexport = ndtoken
     )
+
+    if(is.na(num_rec)){
+        # nedořešeno, proč vzniká... (např. u Saturniidae, Limacodidae, Endromidae) při volání čeledí
+        return(data.frame())
+    }
+
     tables_num <- ceiling(num_rec / pagesize)
     table_df_list <- vector("list", length = tables_num)
     cat("Downloading:\n")
@@ -142,6 +148,9 @@ ndop_download <- function(species, family, group, locations = 0, search_payload)
         table_resp <- httr::content(table_post,
                                     type = "text",
                                     encoding = 'cp1250')
+
+        # alt?
+        # table_df_list[[i]] <- read_delim(table_resp, delim=";", locale = locale("cs", decimal_mark = ","))
         table_df_list[[i]] <- read.delim(text = table_resp,
                                          sep = ";",
                                          dec = ",",
@@ -150,9 +159,34 @@ ndop_download <- function(species, family, group, locations = 0, search_payload)
                                  table_df_list[[i]]$Y)
         table_df_list[[i]][hidden_coords,c("X","Y")] <-  NA
         table_df_list[[i]]$X <- as.numeric(gsub(",",".",table_df_list[[i]]$X))
-        table_df_list[[i]]$Y <- as.numeric(gsub(",",".",table_df_list[[i]]$Y))    
+        table_df_list[[i]]$Y <- as.numeric(gsub(",",".",table_df_list[[i]]$Y)) 
+
+        # [1] "Ciconia ciconia"
+        # 43649 records found
+        # Downloading:
+        # 1 - 10000
+        # 10001 - 20000
+        # Error in `vec_rbind()`:
+        # ! Can't combine `..1$ID_LOKAL` <character> and `..2$ID_LOKAL` <integer>.
+        table_df_list[[i]]$ID_LOKAL %<>% as.integer # raději napevno přetypuji...
+
+        if(i <= 1){
+            table_df <- table_df_list[[i]]
+        }else{
+            table_df %<>% add_row(table_df_list[[i]])
+        }
     }
-    table_df <- do.call(rbind, table_df_list)
+
+    # nefunguje, když je chyba v datech (výše nahrazeno add_row):
+        # Geometridae
+        # Downloading:
+        #   1 - 10000
+        # ...
+        # 30001 - 31492
+        # Error in rbind(deparse.level, ...) : 
+        #   numbers of columns of arguments do not match
+    # table_df <- do.call(rbind, table_df_list) 
+
     if (locations == 2) {
         sf_list <- get_locations(filter_session)
         sf_df <- list(sf_list,table_df)
